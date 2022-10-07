@@ -1,0 +1,8 @@
+# Easy GUI manipulation in Python (move mouse, click on things, and write using virtual keyboard)
+pyautogui==0.9.53
+# Manipulates clipboard
+pyperclip==1.8.2
+# Classical computer vision library
+opencv-python==4.6.0.66
+# Simplifies some image manipulation operations
+imutils==0.5.4
