@@ -6,7 +6,7 @@ import pyperclip
 
 def main():
     words = list()
-    with codecs.open("words.txt", "r", "utf-8") as f:
+    with codecs.open("mots_frquents.txt", "r", "utf-8") as f:
         words = f.readlines()
         for text in words[:]:
             # Don't forget this prefix is the pin prefix, not the classical one
