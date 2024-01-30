@@ -71,7 +71,8 @@ class Sutom implements Callable<String> {
 				Map.entry('W', 0.1),
 				Map.entry('Z', 0.1));
 
-    @Option(description = "Used words file", names= {"--words-file"}, defaultValue = "liste.de.mots.francais.frgut.txt")
+	// Downloaded from https://github.com/Lionel-D/sutom/blob/main/data/mots.txt
+    @Option(description = "Used words file", names= {"--words-file"}, defaultValue = "mots.txt")
     File wordsFile;
     @Option(description="The url to play SUTOM", names = {"--sutom-url"}, defaultValue = "https://sutom.nocle.fr")
     String sutomUrl;
