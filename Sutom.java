@@ -1,4 +1,5 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
+
 //DEPS info.picocli:picocli:4.6.3
 //DEPS com.microsoft.playwright:playwright:1.39.0
 //DEPS commons-io:commons-io:2.15.0
@@ -72,7 +73,7 @@ class Sutom implements Callable<String> {
 				Map.entry('Z', 0.1));
 
 	// Downloaded from https://github.com/Lionel-D/sutom/blob/main/data/mots.txt
-    @Option(description = "Used words file", names= {"--words-file"}, defaultValue = "mots.txt")
+    @Option(description = "Used words file", names= {"--words-file"}, defaultValue = "mots_pour_sutom.txt")
     File wordsFile;
     @Option(description="The url to play SUTOM", names = {"--sutom-url"}, defaultValue = "https://sutom.nocle.fr")
     String sutomUrl;
@@ -109,9 +110,9 @@ class Sutom implements Callable<String> {
 		Locator table = page.locator("div#grille table");
 		var puzzleDefinition = definePuzzle(page, table);
 		logger.info(String.format("Found table %s", puzzleDefinition));
-		Set<String> wordsMatchingConstraints = words.stream()
+		List<String> wordsMatchingConstraints = words.stream()
 				.filter(w -> w.length()==puzzleDefinition.cols)
-				.collect(Collectors.toSet());
+				.collect(Collectors.toList());
 		logger.info(String.format("There are %d right sized words", wordsMatchingConstraints.size()));
 		wordsMatchingConstraints.stream()
 			.parallel()
@@ -119,7 +120,15 @@ class Sutom implements Callable<String> {
 		// Now we know the puzzle complexity, let's play!
 		int row = 0;
 		var letters = readLetters(page, table, puzzleDefinition, row, null);
-		wordsMatchingConstraints = findWordsMatchinConstraints(wordsMatchingConstraints, letters);
+		var firstLetter = Character.toString(letters.get(0).character);
+		// First line is very special case where we simply check the first letter
+		// There are many letters, so do things as fast possible
+		wordsMatchingConstraints = wordsMatchingConstraints.stream().parallel()
+				.filter(w -> w.startsWith(firstLetter))
+    			.sorted(wordsByFrequencies())
+				.collect(Collectors.toList());
+		// We need a delay between enter and scan because Playwright tends to get crazy
+		final int WAIT_DELAY_MS = 500*puzzleDefinition.cols;
 		// And now, filter words with the right first letter
 		while(row<puzzleDefinition.cols) {
 			if(wordsMatchingConstraints.size()>100) {
@@ -130,14 +139,16 @@ class Sutom implements Callable<String> {
 			String toAttempt = findBestWord(wordsMatchingConstraints, letters);
 			page.keyboard().type(toAttempt);
 			page.keyboard().press("Enter");
-			page.waitForTimeout(100*puzzleDefinition.cols);
+			logger.info(String.format("Waiting %d ms", WAIT_DELAY_MS));
+			page.waitForTimeout(WAIT_DELAY_MS);
 			letters = readLetters(page, table, puzzleDefinition, row, letters);
-			row++;
 			if(foundWord(letters)) {
-				return String.format("The word you're looking for is \"%s\"", toAttempt);
+				logger.info(String.format("The word you're looking for is \"%s\" (found in %d tries)", toAttempt, row));
+				return toAttempt;
 			} else {
 				wordsMatchingConstraints = findWordsMatchinConstraints(wordsMatchingConstraints, letters);
 			}
+			row++;
 		}
 		return "Couldn't find any word";
 	}
@@ -168,7 +179,7 @@ class Sutom implements Callable<String> {
     	return true;
 	}
 
-	private String findBestWord(Set<String> words, List<Sutom.Letter> letters) {
+	private String findBestWord(List<String> words, List<Sutom.Letter> letters) {
 		return words.stream()
 				.findFirst()
 				.orElseThrow(() -> new UnsupportedOperationException("No string found matching constraints"))
@@ -183,20 +194,19 @@ class Sutom implements Callable<String> {
     		.mapToDouble(entry -> LETTER_FREQUENCIES.get(entry.getKey()) * count.size() /*/entry.getValue()*/)
     		.sum();
     }
-    private Set<String> findWordsMatchinConstraints(Set<String> wordsMatchingConstraints,
+    private List<String> findWordsMatchinConstraints(List<String> wordsMatchingConstraints,
 			List<Sutom.Letter> letters) {
     	logger.info(String.format("There are %d candidates", wordsMatchingConstraints.size()));
-		Stream<String> filtered = wordsMatchingConstraints.stream()
-//				.parallel()
-				.filter(w -> wordMatchConstraints(w, letters));
-		Set<String> returned = filtered
-				.collect(Collectors.toCollection(() -> newWordsByFrequencySet()));
+    	List<String> returned = wordsMatchingConstraints.stream()
+    			.filter(w -> wordMatchConstraints(w, letters))
+    			.sorted(wordsByFrequencies())
+    			.collect(Collectors.toList());
     	logger.info(String.format("There are %d matching words", returned.size()));
     	return returned;
 	}
 
-	private Set<String> newWordsByFrequencySet() {
-		return new TreeSet(Comparator.comparingDouble(s -> WORD_FREQUENCIES.get(s)).reversed());
+	private Comparator<String> wordsByFrequencies() {
+		return Comparator.comparingDouble((String s) -> WORD_FREQUENCIES.get(s)).reversed();
 	}
 
 	private boolean wordMatchConstraints(String w, List<Letter> letters) {
