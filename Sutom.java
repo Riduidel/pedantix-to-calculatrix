@@ -155,18 +155,14 @@ class Sutom implements Callable<String> {
 	private List<Sutom.Letter> removeCharactersVisibleNowhereFrom(List<Letter> letters) {
 		Set<Character> charactersNowhere = letters.stream()
 			.filter(l -> l.matching==Matching.NOWHERE)
-			.flatMap(l -> l.forbidden.stream())
+			.flatMap(l -> l.nowhere.stream())
 			.distinct()
 			.collect(Collectors.toSet());
 		if(charactersNowhere.isEmpty())
 			return letters;
 		return letters.stream()
 				.map(l -> {
-					Set<Character> forbidden = new HashSet<Character>(charactersNowhere);
-					if(l.matching==Matching.RIGHT_PLACE)
-						forbidden.remove(l.character);
-					forbidden.addAll(l.forbidden);
-					return new Letter(l.character, forbidden, l.matching);
+					return new Letter(l.character, l.notHere, charactersNowhere, l.matching);
 				})
 				.collect(Collectors.toList());
 	}
@@ -219,6 +215,10 @@ class Sutom implements Callable<String> {
 			case NOWHERE:
 				if (c==l.character)
 					return false;
+				else if(l.notHere.contains(c))
+					return false;
+				else if(l.nowhere.contains(c))
+					return false;
 				break;
 			case RIGHT_PLACE:
 				if(c!=l.character)
@@ -235,7 +235,7 @@ class Sutom implements Callable<String> {
     	MISSING,
     	NOWHERE
     }
-    record Letter(Character character, Set<Character> forbidden, Matching matching) {}
+    record Letter(Character character, Set<Character> notHere, Set<Character> nowhere, Matching matching) {}
     private List<Letter> readLetters(Page page, Locator table, PuzzleDefinition puzzleDefinition, int rowIndex, List<Letter> previousTurnLetters) {
     	Locator rows = table.locator("tr");
     	Locator row = rows.nth(rowIndex).locator("td");
@@ -257,7 +257,8 @@ class Sutom implements Callable<String> {
 		String innerText = cell.innerText();
 		char text = innerText.charAt(0);
 		String cssClass = cell.getAttribute("class");
-		Set<Character> forbidden = new HashSet<Character>();
+		Set<Character> notHere = new HashSet<Character>();
+		Set<Character> nowhere = new HashSet<Character>();
 		Matching matching;
 		if(text=='.') {
 			matching = Matching.MISSING;
@@ -270,21 +271,21 @@ class Sutom implements Callable<String> {
 				while(cssClass==null) {
 					cssClass = cell.getAttribute("class");
 				}
-				forbidden.addAll(previousLetter.forbidden);
+				notHere.addAll(previousLetter.notHere);
 				if(cssClass.contains("bien-place")) {
 					matching = Matching.RIGHT_PLACE;
 				} else if(cssClass.contains("mal-place")) {
 					matching = Matching.BAD_PLACE;
-					forbidden.add(text);
+					notHere.add(text);
 				} else if(cssClass.contains("non-trouve")) {
 					matching = Matching.NOWHERE;
-					forbidden.add(text);
+					nowhere.add(text);
 				} else {
 					throw new UnsupportedOperationException("This case should never happen");
 				}
 			}
 		}
-		return new Letter(text, forbidden, matching);
+		return new Letter(text, notHere, nowhere, matching);
 	}
 	record PuzzleDefinition(int rows, int cols) {}
 	private PuzzleDefinition definePuzzle(Page page, Locator table) {
