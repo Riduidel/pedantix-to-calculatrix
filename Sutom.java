@@ -13,12 +13,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -134,7 +136,7 @@ class Sutom implements Callable<String> {
 			if(wordsMatchingConstraints.size()>100) {
 				logger.info(String.format("Words list reduced to %d", wordsMatchingConstraints.size()));
 			} else {
-				logger.info(String.format("Words list reduced to %s", wordsMatchingConstraints));
+				logger.info(String.format("Words list reduced to %s", withFrequencies(wordsMatchingConstraints)));
 			}
 			String toAttempt = findBestWord(wordsMatchingConstraints, letters);
 			page.keyboard().type(toAttempt);
@@ -152,6 +154,15 @@ class Sutom implements Callable<String> {
 		}
 		return "Couldn't find any word";
 	}
+	private Map<String, Double> withFrequencies(List<String> wordsMatchingConstraints) {
+		return wordsMatchingConstraints.stream()
+				.collect(Collectors.toMap(
+						Function.identity(), 
+						w -> WORD_FREQUENCIES.get(w),
+						(a, b) -> a,
+						() -> new LinkedHashMap<>()));
+	}
+
 	private List<Sutom.Letter> removeCharactersVisibleNowhereFrom(List<Letter> letters) {
 		Set<Character> charactersNowhere = letters.stream()
 			.filter(l -> l.matching==Matching.NOWHERE)
