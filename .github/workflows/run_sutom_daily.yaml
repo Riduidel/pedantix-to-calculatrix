@@ -5,30 +5,24 @@ on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
+
 jobs:
-  run_sutom_bot:
-    timeout-minutes: 60
+  jbang:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    name: A job to run jbang
     steps:
-    - uses: actions/checkout@v3
+    - name: checkout
+      uses: actions/checkout@v1
+    - uses: actions/cache@v1
       with:
-        ref: main
-        fetch-depth: '0'
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
+        path: /root/.jbang
+        key: $-jbang-$
+        restore-keys: |
+            $-jbang-
+    - name: jbang
+      uses: jbangdev/jbang-action@v0.115.0
       with:
-        distribution: adopt
-        java-version: 17
-        cache: 'maven'
-    - name: Run everything in the same step
-      run: |
-        sudo apt update
-        sudo apt install curl -y
-        curl -s "https://get.sdkman.io" | bash
-        source "/home/runner/.sdkman/bin/sdkman-init.sh"
-        sdk help
-        sdk install jbang
-        jbang --help
-        xvfb-run jbang Sutom.java
+        script: Sutom.java
+        scriptargs: "my world"
+      env:
+        JBANG_REPO: /root/.jbang/repository
