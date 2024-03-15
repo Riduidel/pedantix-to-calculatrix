@@ -20,13 +20,35 @@ jobs:
       with:
         distribution: adopt
         java-version: 17
+    - name: Cache playwright binaries
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: |
+          ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright
     - name: Run everything in the same step
       run: |
         sudo apt update
         sudo apt install curl -y
         curl -s "https://get.sdkman.io" | bash
         source "/home/runner/.sdkman/bin/sdkman-init.sh"
-        sdk help
         sdk install jbang
-        jbang --help
         xvfb-run jbang Sutom.java
+    - name: Extract trigger warning
+      run: echo "tw=$(cat target/sutom/tw.txt)" >> $GITHUB_OUTPUT
+    - name: Extract alt text
+      run: echo "alt=$(cat target/sutom/alt.txt)" >> $GITHUB_OUTPUT
+    - name: Send toot to Mastodon with trigger warning
+      id: mastodon_toot
+      uses: cbrgm/mastodon-github-action@v2
+      with:
+        access-token: ${{ secrets.MASTODON_ACCESS_TOKEN }} # Mastodon access token for authentication.
+        url: ${{ secrets.MASTODON_URL }} # Mastodon instance URL, e.g., https://example.social.
+        message: ${{ steps.vars.outputs.alt }}
+        visibility: "unlisted" # Make the toot unlisted to avoid spamming public timelines.
+        sensitive: "true" # Mark the toot as sensitive.
+        spoiler-text: ${{ steps.vars.outputs.tw }} # Provide a content warning for the actual message.
+        language: "en" # ISO 639 language code for the toot.
+    
+    

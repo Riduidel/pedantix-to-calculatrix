@@ -9,7 +9,9 @@
 
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -18,14 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import javax.swing.text.html.CSS;
 
 import org.apache.commons.io.FileUtils;
 
@@ -41,6 +39,9 @@ import com.microsoft.playwright.Playwright;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+//DEPS commons-io:commons-io:2.15.1
+
 
 @Command(name = "Sutom", mixinStandardHelpOptions = true, version = "Pedantix 0.1",
         description = "Sutom solver made with jbang")
@@ -77,6 +78,16 @@ class Sutom implements Callable<String> {
 	// Downloaded from https://github.com/Lionel-D/sutom/blob/main/data/mots.txt
     @Option(description = "Used words file", names= {"--words-file"}, defaultValue = "mots_pour_sutom.txt")
     File wordsFile;
+    @Option(description = "Table screenshot file", names= {"--table-screenshot-file"}, defaultValue = "target/sutom/table-screenshot.png")
+    File tableScreenshot;
+    @Option(description = "Sumup screenshot file", names= {"--sumup-screenshot-file"}, defaultValue = "target/sutom/sumup-screenshot.png")
+    File sumupScreenshot;
+    @Option(description = "File containing the alt text of image",
+    		names = "--alt-file", defaultValue = "target/sutom/alt.txt")
+    File altFile;
+    @Option(description = "File containing the tw file",
+    		names = "--tw-file", defaultValue = "target/sutom/tw.txt")
+    File twFile;
     @Option(description="The url to play SUTOM", names = {"--sutom-url"}, defaultValue = "https://sutom.nocle.fr")
     String sutomUrl;
     
@@ -102,14 +113,50 @@ class Sutom implements Callable<String> {
         	BrowserContext context = createPlaywrightContext(playwright);
         	try(Page page = context.newPage()) {
         		page.navigate(sutomUrl);
+        		Locator table = page.locator("div#grille table").first();
         		// Now it's time to work
-        		return playSutom(words, page);
+        		String found = playSutom(words, page, table);
+        		if(found!=null) {
+        			handleEndgame(page, table, found);
+        		}
+        		return found;
         	}
         }
     }
 
-	private String playSutom(List<String> words, Page page) {
-		Locator table = page.locator("div#grille table");
+	private void handleEndgame(Page page, Locator table, String found) throws IOException {
+		// If we have found the button, we may have the greetings panel visible
+		// if so, capture the interesting part THEN close that panel
+		Locator greetings = page.locator("fin-de-partie-panel panel-fenetre").first();
+		// Now locate the weird image hinting the result
+		sumupScreenshot.delete();
+		Locator sumup = page.locator("#fin-de-partie-panel-resume");
+		String sumupText = sumup.textContent();
+		logger.info("capturing sumup in "+sumupScreenshot);
+		sumup.screenshot(new Locator.ScreenshotOptions()
+				.setPath(sumupScreenshot.toPath()));
+		page.locator("#panel-fenetre-bouton-fermeture").click();
+		tableScreenshot.delete();
+		String tableText = table.textContent();
+		List<String> textSteps = Arrays.asList(
+			    tableText.split(String.format("(?<=\\G.{%d})", found.length())));
+		String attempts = textSteps
+				.stream()
+				.collect(Collectors.joining("\n"));
+			    
+		logger.info("capturing full table in "+sumupScreenshot);
+		table.screenshot(new Locator.ScreenshotOptions()
+				.setPath(tableScreenshot.toPath()));
+		FileUtils.write(twFile, 
+				String.format("J'ai résolu Sutom aujourd'hui en %d coups", textSteps.size()),
+				"UTF-8");
+		FileUtils.write(altFile, 
+				String.format("Les différentes étapes pour résoudre Sutom sont\n%s", 
+						textSteps.stream().collect(Collectors.joining("\n"))),
+				"UTF-8");
+	}
+
+	private String playSutom(List<String> words, Page page, Locator table) {
 		var puzzleDefinition = definePuzzle(page, table);
 		logger.info(String.format("Found table %s", puzzleDefinition));
 		List<String> wordsMatchingConstraints = words.stream()
@@ -145,14 +192,14 @@ class Sutom implements Callable<String> {
 			page.waitForTimeout(WAIT_DELAY_MS);
 			letters = readLetters(page, table, puzzleDefinition, row, letters);
 			if(foundWord(letters)) {
-				logger.info(String.format("The word you're looking for is \"%s\" (found in %d tries)", toAttempt, row));
+				logger.info(String.format("The word you're looking for is \"%s\" (found in %d tries)", toAttempt, row+1));
 				return toAttempt;
 			} else {
 				wordsMatchingConstraints = findWordsMatchinConstraints(wordsMatchingConstraints, letters);
 			}
 			row++;
 		}
-		return "Couldn't find any word";
+		return null;
 	}
 	private Map<String, Double> withFrequencies(List<String> wordsMatchingConstraints) {
 		return wordsMatchingConstraints.stream()
@@ -314,6 +361,7 @@ class Sutom implements Callable<String> {
     			);
     	BrowserContext context = chromium.newContext(new NewContextOptions()
     			.setJavaScriptEnabled(true));
+    	context.grantPermissions(Arrays.asList("clipboard-read"));
 		// Disable all resources coming from any domain that is not
 		// mvnrepository or wayback machine
 //		context.route(url -> !(url.contains("mvnrepository.com") || url.contains("web.archive.com")), 
