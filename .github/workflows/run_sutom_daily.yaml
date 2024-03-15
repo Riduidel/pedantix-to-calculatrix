@@ -38,7 +38,11 @@ jobs:
     - name: Extract trigger warning
       run: echo "tw=$(cat target/sutom/tw.txt)" >> $GITHUB_OUTPUT
     - name: Extract alt text
-      run: echo "alt=$(cat target/sutom/alt.txt)" >> $GITHUB_OUTPUT
+      run: |
+        MY_STRING=$(cat target/sutom/alt.txt)
+        echo "alt<<EOF" >> $GITHUB_OUTPUT
+        echo "$MY_STRING" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
     - name: Send toot to Mastodon with trigger warning
       id: mastodon_toot
       uses: cbrgm/mastodon-github-action@v2
