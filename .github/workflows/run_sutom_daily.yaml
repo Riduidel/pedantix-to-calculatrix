@@ -34,25 +34,4 @@ jobs:
         curl -s "https://get.sdkman.io" | bash
         source "/home/runner/.sdkman/bin/sdkman-init.sh"
         sdk install jbang
-        xvfb-run jbang Sutom.java
-    - name: Extract trigger warning
-      run: echo "tw=$(cat target/sutom/tw.txt)" >> $GITHUB_OUTPUT
-    - name: Extract alt text
-      run: |
-        MY_STRING=$(cat target/sutom/alt.txt)
-        echo "alt<<EOF" >> $GITHUB_OUTPUT
-        echo "$MY_STRING" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-    - name: Send toot to Mastodon with trigger warning
-      id: mastodon_toot
-      uses: cbrgm/mastodon-github-action@v2
-      with:
-        access-token: ${{ secrets.MASTODON_ACCESS_TOKEN }} # Mastodon access token for authentication.
-        url: ${{ secrets.MASTODON_URL }} # Mastodon instance URL, e.g., https://example.social.
-        message: ${{ steps.vars.outputs.alt }}
-        visibility: "unlisted" # Make the toot unlisted to avoid spamming public timelines.
-        sensitive: "true" # Mark the toot as sensitive.
-        spoiler-text: ${{ steps.vars.outputs.tw }} # Provide a content warning for the actual message.
-        language: "en" # ISO 639 language code for the toot.
-    
-    
+        xvfb-run jbang Sutom.java --mastodon-access-token ${{ secrets.MASTODON_ACCESS_TOKEN }} --mastodon-server-host-name ${{ secrets.MASTODON_SERVER_HOST_NAME }}

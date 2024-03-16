@@ -6,7 +6,9 @@
 //DEPS com.github.fge:throwing-lambdas:0.5.0
 //DEPS org.apache.commons:commons-lang3:3.13.0
 //DEPS com.ibm.icu:icu4j:74.2
-
+//REPOS central
+//REPOS maven-snapshots=https://s01.oss.sonatype.org/content/repositories/snapshots/
+//DEPS social.bigbone:bigbone:2.0.0-SNAPSHOT
 
 import java.io.File;
 import java.io.IOException;
@@ -39,9 +41,10 @@ import com.microsoft.playwright.Playwright;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-
-//DEPS commons-io:commons-io:2.15.1
-
+import social.bigbone.MastodonClient;
+import social.bigbone.api.entity.MediaAttachment;
+import social.bigbone.api.entity.data.Visibility;
+import social.bigbone.api.exception.BigBoneRequestException;
 
 @Command(name = "Sutom", mixinStandardHelpOptions = true, version = "Pedantix 0.1",
         description = "Sutom solver made with jbang")
@@ -90,6 +93,10 @@ class Sutom implements Callable<String> {
     File twFile;
     @Option(description="The url to play SUTOM", names = {"--sutom-url"}, defaultValue = "https://sutom.nocle.fr")
     String sutomUrl;
+    @Option(description="The mastodon server host name", names = {"--mastodon-server-host-name"}, defaultValue = "framapiaf.org")
+    String mastodonServerHostname;
+    @Option(description="The mastodon access token", names = {"--mastodon-access-token"})
+    String mastodonAccessToken;
     
     private Map<String, Double> WORD_FREQUENCIES = Collections.synchronizedMap(new TreeMap<>());
 
@@ -124,7 +131,7 @@ class Sutom implements Callable<String> {
         }
     }
 
-	private void handleEndgame(Page page, Locator table, String found) throws IOException {
+	private void handleEndgame(Page page, Locator table, String found) throws IOException, BigBoneRequestException {
 		// If we have found the button, we may have the greetings panel visible
 		// if so, capture the interesting part THEN close that panel
 		Locator greetings = page.locator("fin-de-partie-panel panel-fenetre").first();
@@ -147,14 +154,27 @@ class Sutom implements Callable<String> {
 		logger.info("capturing full table in "+sumupScreenshot);
 		table.screenshot(new Locator.ScreenshotOptions()
 				.setPath(tableScreenshot.toPath()));
-		FileUtils.write(twFile, 
-				String.format("J'ai résolu Sutom aujourd'hui en %d coups", textSteps.size()),
-				"UTF-8");
-		FileUtils.write(altFile, 
-				String.format("Les différentes étapes pour résoudre Sutom sont\n%s", 
-						textSteps.stream().collect(Collectors.joining("\n"))),
-				"UTF-8");
+		String tw = String.format("J'ai résolu #Sutom aujourd'hui en %d coups", textSteps.size());
+		String alt = String.format("Les différentes étapes pour résoudre Sutom sont\n%s", 
+						textSteps.stream().collect(Collectors.joining("\n")));
+		if(mastodonAccessToken==null) {
+			logger.warning("Without an access token, we can't send the result to Mastodon");
+		} else {
+			sendMastodonMessage(tw, tableScreenshot, alt);
+		}
 	}
+
+	private void sendMastodonMessage(String tw, File tableScreenshotFile, String alt) throws BigBoneRequestException {
+		MastodonClient client=new MastodonClient.Builder(mastodonServerHostname)
+				.accessToken(mastodonAccessToken)
+				.build();
+		MediaAttachment attachment = client.media()
+			.uploadMedia(tableScreenshotFile, "image/png", alt)
+			.execute();
+		client.statuses().postStatus("", Arrays.asList(attachment.getId()), 
+				Visibility.UNLISTED, null, true, tw)
+			.execute();
+    }
 
 	private String playSutom(List<String> words, Page page, Locator table) {
 		var puzzleDefinition = definePuzzle(page, table);
