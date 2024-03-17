@@ -97,6 +97,10 @@ class Sutom implements Callable<String> {
     String mastodonServerHostname;
     @Option(description="The mastodon access token", names = {"--mastodon-access-token"})
     String mastodonAccessToken;
+    @Option(description="The mastodon trigger warning template (use %d for number of tries)", 
+    		names = {"--mastodon-trigger-warning-template"},
+    		defaultValue = "🤖 Bidibop, je suis un bot. Et j'ai résolu Sutom en %d essais ! (la réponse est dans le message)")
+	String triggerWarningTemplate;
     
     private Map<String, Double> WORD_FREQUENCIES = Collections.synchronizedMap(new TreeMap<>());
 
@@ -154,7 +158,7 @@ class Sutom implements Callable<String> {
 		logger.info("capturing full table in "+sumupScreenshot);
 		table.screenshot(new Locator.ScreenshotOptions()
 				.setPath(tableScreenshot.toPath()));
-		String tw = String.format("J'ai résolu #Sutom aujourd'hui en %d coups", textSteps.size());
+		String tw = String.format(triggerWarningTemplate, textSteps.size());
 		String alt = String.format("Les différentes étapes pour résoudre Sutom sont\n%s", 
 						textSteps.stream().collect(Collectors.joining("\n")));
 		if(mastodonAccessToken==null) {
